@@ -2,16 +2,6 @@
 
 #############################################
 # ddns-go Installer (最终整合增强版)
-# - 自动架构检测
-# - 自动获取最新版本
-# - 正确下载 ddns-go 官方 tar.gz
-# - 完整 systemd 安装（静默模式，不阻塞）
-# - NAT / IPv6 / ASN 检测
-# - UFW 自动检测 + 自动放行
-# - firewalld 自动检测 + 自动放行
-# - iptables 检测
-# - 端口占用检测
-# - 彩色输出 + 日志 + 调试模式
 #############################################
 
 DEFAULT_PORT=9876
@@ -60,6 +50,36 @@ parse_args() {
         esac
         shift
     done
+}
+
+#==================== 交互式选择端口 ====================#
+ask_port() {
+    echo ""
+    echo "请选择 ddns-go 的运行端口（默认：9876）"
+    echo -n "请输入端口号（1-65535，直接回车使用默认）： "
+
+    read -r input_port
+
+    if [ -z "$input_port" ]; then
+        PORT=$DEFAULT_PORT
+        log_info "使用默认端口：$PORT"
+        return
+    fi
+
+    if ! [[ "$input_port" =~ ^[0-9]+$ ]]; then
+        log_error "端口必须是数字"
+        ask_port
+        return
+    fi
+
+    if [ "$input_port" -lt 1 ] || [ "$input_port" -gt 65535 ]; then
+        log_error "端口必须在 1-65535 范围内"
+        ask_port
+        return
+    fi
+
+    PORT=$input_port
+    log_success "已选择端口：$PORT"
 }
 
 #==================== 依赖检查 ====================#
@@ -122,14 +142,14 @@ download_and_extract() {
     curl -L -o ddns-go.tar.gz "$URL"
 
     if [ "$(stat -c%s ddns-go.tar.gz)" -lt 100000 ]; then
-        log_error "下载文件异常（可能是 404 页面），请检查网络或版本号"
+        log_error "下载文件异常（可能是 404 页面）"
         exit 1
     fi
 
     log_info "解压 ddns-go..."
 
     if ! tar -xzf ddns-go.tar.gz; then
-        log_error "解压失败，文件可能损坏"
+        log_error "解压失败"
         exit 1
     fi
 
@@ -146,14 +166,13 @@ check_port_in_use() {
     if ss -tulnp | grep -q ":${PORT} "; then
         PROCESS=$(ss -tulnp | grep ":${PORT} " | awk '{print $NF}')
         log_error "端口 ${PORT} 已被占用（进程：${PROCESS}）"
-        echo "请更换端口或停止占用进程后重试。"
         exit 1
     fi
 
     log_success "端口 ${PORT} 未被占用"
 }
 
-#==================== 安装 systemd 服务（静默模式） ====================#
+#==================== 安装 systemd 服务 ====================#
 install_systemd_service() {
     log_info "安装 systemd 服务..."
 
@@ -166,12 +185,31 @@ install_systemd_service() {
     log_success "systemd 服务安装并已启动"
 }
 
+#==================== 修复 systemd 端口 ====================#
+fix_systemd_port() {
+    SERVICE_FILE="/etc/systemd/system/ddns-go.service"
+
+    if [ ! -f "$SERVICE_FILE" ]; then
+        log_error "未找到 systemd 服务文件：$SERVICE_FILE"
+        return
+    fi
+
+    log_info "写入端口到 systemd 服务文件..."
+
+    sed -i "s|ExecStart=.*|ExecStart=/opt/ddns-go/ddns-go -l :${PORT}|g" "$SERVICE_FILE"
+
+    systemctl daemon-reload
+    systemctl restart ddns-go
+
+    log_success "systemd 服务已更新为端口：${PORT}"
+}
+
 #==================== UFW 检测 + 自动放行 ====================#
 check_ufw_status() {
     log_info "检测防火墙状态（UFW）..."
 
     if ! command -v ufw >/dev/null 2>&1; then
-        log_warn "UFW 未安装（跳过 UFW 检测）"
+        log_warn "UFW 未安装"
         return
     fi
 
@@ -193,14 +231,12 @@ check_ufw_status() {
 
     case "$answer" in
         y|Y)
-            log_info "正在放行端口 ${PORT}..."
             ufw allow "${PORT}" >/dev/null 2>&1
             ufw reload >/dev/null 2>&1
             log_success "端口 ${PORT} 已成功放行"
             ;;
         *)
             log_warn "已跳过自动放行端口 ${PORT}"
-            echo -e "如需手动放行：\n  ufw allow ${PORT}\n  ufw reload"
             ;;
     esac
 }
@@ -210,7 +246,7 @@ check_firewalld_status() {
     log_info "检测 firewalld 状态..."
 
     if ! command -v firewall-cmd >/dev/null 2>&1; then
-        log_warn "firewalld 未安装（跳过 firewalld 检测）"
+        log_warn "firewalld 未安装"
         return
     fi
 
@@ -230,14 +266,12 @@ check_firewalld_status() {
 
     case "$answer" in
         y|Y)
-            log_info "正在放行端口 ${PORT}/tcp..."
             firewall-cmd --permanent --add-port="${PORT}/tcp" >/dev/null 2>&1
             firewall-cmd --reload >/dev/null 2>&1
             log_success "端口 ${PORT}/tcp 已成功放行"
             ;;
         *)
             log_warn "已跳过自动放行端口 ${PORT}/tcp"
-            echo -e "如需手动放行：\n  firewall-cmd --permanent --add-port=${PORT}/tcp\n  firewall-cmd --reload"
             ;;
     esac
 }
@@ -247,19 +281,18 @@ check_iptables_status() {
     log_info "检测 iptables 状态..."
 
     if ! command -v iptables >/dev/null 2>&1; then
-        log_warn "iptables 未安装（跳过 iptables 检测）"
+        log_warn "iptables 未安装"
         return
     fi
 
     if iptables -L INPUT -n | grep -q "DROP"; then
-        log_warn "检测到 iptables 存在 DROP 规则，可能影响端口访问"
+        log_warn "iptables 存在 DROP 规则，可能影响访问"
     fi
 
     if iptables -L INPUT -n | grep -q "${PORT}"; then
         log_success "iptables 中已存在端口 ${PORT} 的规则"
     else
         log_warn "iptables 中未找到端口 ${PORT} 的放行规则"
-        echo -e "如需手动放行：\n  iptables -I INPUT -p tcp --dport ${PORT} -j ACCEPT\n  iptables-save > /etc/iptables/rules.v4"
     fi
 }
 
@@ -270,8 +303,8 @@ detect_public_ip() {
     PUB_IPV4=$(curl -4 -fsSL https://api.ipify.org || echo "")
     PUB_IPV6=$(curl -6 -fsSL https://api64.ipify.org || echo "")
 
-    [ -n "$PUB_IPV4" ] && log_success "公网 IPv4：$PUB_IPV4" || log_warn "未获取到公网 IPv4"
-    [ -n "$PUB_IPV6" ] && log_success "公网 IPv6：$PUB_IPV6" || log_warn "未获取到公网 IPv6"
+    [ -n "$PUB_IPV4" ] && log_success "公网 IPv4：$PUB_IPV4"
+    [ -n "$PUB_IPV6" ] && log_success "公网 IPv6：$PUB_IPV6"
 }
 
 #==================== NAT / 网络结构诊断 ====================#
@@ -316,6 +349,7 @@ main() {
 
     log_init
     parse_args "$@"
+    ask_port
 
     log_info "使用端口：$PORT"
     [ "$DEBUG" = true ] && log_info "调试模式已开启"
@@ -326,6 +360,7 @@ main() {
     download_and_extract
     check_port_in_use
     install_systemd_service
+    fix_systemd_port
     check_ufw_status
     check_firewalld_status
     check_iptables_status
