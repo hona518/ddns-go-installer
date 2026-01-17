@@ -22,7 +22,7 @@
 
 ## 🚀 一键安装
 
-适用于 Debian / Ubuntu / CentOS / AlmaLinux / RockyLinux 等 systemd 系统。
+本安装器已在 Debian / Ubuntu 测试通过，理论上兼容 CentOS / AlmaLinux / RockyLinux，但未做全面测试。
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/main/install.sh)
