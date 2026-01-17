@@ -158,17 +158,27 @@ download_and_extract() {
     log_success "ddns-go 下载并解压完成"
 }
 
-#==================== 端口占用检测 ====================#
+#==================== 端口占用检测（智能版） ====================#
 check_port_in_use() {
     log_info "检测端口是否被占用..."
 
-    if ss -tulnp | grep -q ":${PORT} "; then
-        PROCESS=$(ss -tulnp | grep ":${PORT} " | awk '{print $NF}')
-        log_error "端口 ${PORT} 已被占用（进程：${PROCESS}）"
-        exit 1
+    PORT_INFO=$(ss -tulnp | grep ":${PORT} ")
+
+    if [ -z "$PORT_INFO" ]; then
+        log_success "端口 ${PORT} 未被占用"
+        return
     fi
 
-    log_success "端口 ${PORT} 未被占用"
+    PROCESS_NAME=$(echo "$PORT_INFO" | sed -E 's/.*users:\(\("([^"]+).*/\1/')
+
+    if [ "$PROCESS_NAME" = "ddns-go" ]; then
+        log_info "端口 ${PORT} 正在被 ddns-go 使用（正常）"
+        return
+    fi
+
+    log_error "端口 ${PORT} 已被其他程序占用（进程：${PROCESS_NAME}）"
+    echo "请更换端口或停止占用进程后再继续安装。"
+    exit 1
 }
 
 #==================== 安装 systemd 服务 ====================#
