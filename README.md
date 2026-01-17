@@ -1,11 +1,13 @@
 # ddns-go Installer
 
 <p align="center">
-  <img src="https://img.shields.io/badge/License-MIT-green.svg" />
-  <img src="https://img.shields.io/badge/Platform-Linux-blue.svg" />
-  <img src="https://img.shields.io/badge/Installer-ddns--go-orange.svg" />
-  <img src="https://img.shields.io/github/stars/hona518/ddns-go-installer?style=social" />
+  <img src="https://img.shields.io/badge/Language-Bash-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white" />
+  <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Platform-Linux-orange?style=for-the-badge&logo=linux&logoColor=white" />
+  <img src="https://img.shields.io/badge/Installer-ddns--go-success?style=for-the-badge" />
+  <img src="https://img.shields.io/github/v/release/hona518/ddns-go-installer?style=for-the-badge&logo=github" />
 </p>
+
 
 ## 📚 目录
 
@@ -51,8 +53,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/ma
 
 脚本会自动显示你的 IPv4 / IPv6 地址，例如：
 
-IPv4: http://203.0.113.45:51004  
-IPv6: http://[2408:1234:abcd::1]:51004
+IPv4: http://203.0.113.45:9876  
+IPv6: http://[2408:1234:abcd::1]:9876
 
 首次访问需要进行初始化配置，保存后会自动生成：
 
