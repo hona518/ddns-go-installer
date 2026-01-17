@@ -1,208 +1,209 @@
 # ddns-go Installer
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Language-Bash-4EAA25?style=for-the-badge&logo=gnu-bash&logoColor=white" />
-  <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Platform-Linux-orange?style=for-the-badge&logo=linux&logoColor=white" />
-  <img src="https://img.shields.io/badge/Installer-ddns--go-success?style=for-the-badge" />
-  <img src="https://img.shields.io/github/v/release/hona518/ddns-go-installer?style=for-the-badge&logo=github" />
-</p>
+一个为 **ddns-go** 打造的一键安装器，支持自动安装、更新、卸载、端口管理、防火墙处理、网络诊断等高级功能。
 
-
-## 📚 目录
-
-- [项目简介](#ddns-go-installer)
-- [一键安装](#-一键安装)
-- [安装完成后访问 Web UI](#-安装完成后访问-web-ui)
-- [systemd 管理命令](#-systemd-管理命令每条都带注释适合新手)
-- [安装目录结构](#-安装目录结构)
-- [脚本执行流程](#-脚本执行流程)
-- [示例截图](#-示例截图)
-- [更新日志](#-更新日志)
-- [许可证](#-许可证)
+本项目旨在让 ddns-go 的部署体验变得 **更简单、更可靠、更智能**。
 
 ---
 
-一个用于在 Linux 服务器上自动安装最新版本 ddns-go 的一键脚本。
+## ✨ 功能亮点
 
-本脚本适用于 Debian / Ubuntu 系列系统，具备以下特性：
-
-- 自动检测 CPU 架构（x86_64 / arm64）
-- 自动获取 ddns-go 最新版本（GitHub API）
-- 自动下载并解压到 `/opt/ddns-go`
-- 自动安装 systemd 服务
-- 自动启动 ddns-go
-- 支持用户自定义端口
-- 自动显示 IPv4 + IPv6 访问地址
-- 自动检测 NAT（如 Oracle、部分国内云）
-- 自动检测 UFW 防火墙是否放行端口
+- **一键安装**：自动检测架构、下载最新版本、安装 systemd 服务  
+- **交互式端口选择**：安装时可自定义端口  
+- **智能端口占用检测**：区分 ddns-go 自占端口与其他程序占用  
+- **自动防火墙处理**：支持 UFW / firewalld / iptables  
+- **自动更新**：一键更新到最新版本，可选择修改端口  
+- **一键卸载**：可选删除配置文件，并提示防火墙清理  
+- **网络诊断**：自动检测公网 IP、NAT、ASN、国家等信息  
+- **彩色输出 + 日志系统**：所有操作均记录到 `/var/log/ddns-go-installer.log`  
+- **完全兼容 systemd**：自动安装、修复、重启服务  
 
 ---
 
 ## 🚀 一键安装
 
-将以下命令复制到终端即可：
+适用于 Debian / Ubuntu / CentOS / AlmaLinux / RockyLinux 等 systemd 系统。
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/main/install.sh)
 ```
-## 🔄 更新 ddns-go
 
-如果你已经通过本项目安装了 ddns-go，可以使用 update.sh 一键更新到最新版本。
+安装过程中你将看到：
 
-### 一键更新（推荐）
-无需克隆仓库，直接执行：
+- 交互式端口选择  
+- 自动检测架构  
+- 自动下载最新 ddns-go  
+- 自动安装 systemd 服务  
+- 自动防火墙处理  
+- 网络诊断报告  
+- 最终访问地址展示  
+
+安装完成后访问：
+
+```
+http://<你的公网IP>:<端口>
+```
+
+---
+
+## 🔄 一键更新
+
+更新 ddns-go 到最新版本，并可选择是否修改端口。
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/main/scripts/update.sh)
 ```
 
-### 本地更新（已克隆仓库）
-如果你已经 clone 了仓库：
+更新脚本会自动：
 
-```bash
-./scripts/update.sh
-```
-
-### 调试模式
-输出更详细的执行过程：
-
-```bash
-./scripts/update.sh --debug
-```
-
-update.sh 会自动完成：
-
-- 检测当前版本  
-- 获取最新版本  
-- 自动下载并替换二进制  
-- 自动重启 ddns-go systemd 服务  
-- 保留安装日志 `/var/log/ddns-go-installer.log`  
+- 检测当前端口  
+- 询问是否修改端口  
+- 智能检测端口占用  
+- 下载最新版本  
+- 修复 systemd 服务  
+- 显示访问地址  
 
 ---
 
-## 🗑 卸载 ddns-go
+## 🗑 一键卸载
 
-如果你需要卸载 ddns-go，可以使用 uninstall.sh 完整移除所有相关文件。
-
-### 一键卸载（推荐）
-无需克隆仓库，直接执行：
+支持删除程序、systemd 服务、配置文件，并提示防火墙清理。
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/main/scripts/uninstall.sh)
 ```
 
-### 本地卸载（已克隆仓库）
-如果你已经 clone 了仓库：
+卸载脚本会自动：
 
-```bash
-./scripts/uninstall.sh
-```
-
-### 调试模式
-输出更详细的执行过程：
-
-```bash
-./scripts/uninstall.sh --debug
-```
-
-uninstall.sh 会自动完成：
-
-- 停止 ddns-go 服务  
-- 禁用 systemd 服务  
-- 删除 `/opt/ddns-go` 程序目录  
-- 删除 systemd 服务文件  
-- 保留日志文件 `/var/log/ddns-go-installer.log`  
+- 停止并禁用 systemd 服务  
+- 删除 ddns-go 程序文件  
+- 可选删除配置文件  
+- 提示清理 UFW / firewalld / iptables 规则  
 
 ---
 
-## 🌐 安装完成后访问 Web UI
+## 🛠 systemctl 常用命令（四件套）
 
-脚本会自动显示你的 IPv4 / IPv6 地址，例如：
+安装器会自动为 ddns-go 创建 systemd 服务，你可以使用以下命令管理它：
 
-IPv4: `http://203.0.113.45:9876`  
-IPv6: `http://[2408:1234:abcd::1]:9876`
+### 查看状态
+```bash
+systemctl status ddns-go
+```
 
-首次访问需要进行初始化配置，保存后会自动生成：
+### 重启服务
+```bash
+systemctl restart ddns-go
+```
+
+### 停止服务
+```bash
+systemctl stop ddns-go
+```
+
+### 设置开机自启（安装脚本已自动启用）
+```bash
+systemctl enable ddns-go
+```
+
+服务文件路径：
+
+```
+/etc/systemd/system/ddns-go.service
+```
+
+查看实时日志：
 
 ```bash
+journalctl -u ddns-go -f
+```
+
+---
+
+## 🔥 防火墙说明
+
+脚本会自动检测并处理以下防火墙：
+
+| 防火墙 | 自动放行端口 | 自动清理提示 |
+|--------|--------------|--------------|
+| UFW | ✔ | ✔ |
+| firewalld | ✔ | ✔ |
+| iptables | 检测提示 | ✔ |
+
+如果你使用云服务器（如阿里云、腾讯云、AWS），请确保 **安全组** 也放行对应端口。
+
+---
+
+## 📂 目录结构
+
+```
+ddns-go-installer/
+├── install.sh
+├── scripts/
+│   ├── update.sh
+│   └── uninstall.sh
+└── README.md
+```
+
+---
+
+## 🧩 系统要求
+
+- Linux（必须支持 systemd）  
+- curl / tar / systemctl / ss  
+- root 权限  
+
+---
+
+## ❓ 常见问题（FAQ）
+
+### 1. 安装后访问不了？
+
+可能原因：
+
+- 防火墙未放行端口  
+- 云服务器安全组未放行  
+- NAT / CGNAT 环境导致公网不可达  
+
+脚本会自动检测并提示解决方案。
+
+---
+
+### 2. 如何修改端口？
+
+执行更新脚本：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/main/scripts/update.sh)
+```
+
+---
+
+### 3. 配置文件在哪里？
+
+```
 /opt/ddns-go/.ddns_go_config.yaml
 ```
 
 ---
 
-## 🔧 systemd 管理命令（每条都带注释，适合新手）
+### 4. 日志在哪里？
 
-查看 ddns-go 的运行状态（最常用）：
-```bash
-systemctl status ddns-go
 ```
-
-重启 ddns-go（修改配置后使用）：
-```bash
-systemctl restart ddns-go
-```
-
-停止 ddns-go（不想运行时使用）：
-```bash
-systemctl stop ddns-go
-```
-
-设置开机自启（推荐开启）：
-```bash
-systemctl enable ddns-go
+/var/log/ddns-go-installer.log
 ```
 
 ---
 
-## 📂 安装目录结构
+## 📜 许可证
 
-```bash
-/opt/ddns-go/
-├── ddns-go
-├── .ddns_go_config.yaml（首次保存设置后生成）
-└── systemd 服务文件（自动安装）
-```
+本项目使用 MIT License。
+
+欢迎提交 PR、Issue，一起让 ddns-go 的部署体验更丝滑。
 
 ---
 
-## 📜 脚本执行流程
+## ❤️ 致谢
 
-1. 检查 wget / curl 是否存在  
-2. 自动检测 CPU 架构  
-3. 调用 GitHub API 获取最新版本号  
-4. 下载对应架构的 tar.gz  
-5. 解压到 `/opt/ddns-go`  
-6. 调用 ddns-go 内置的 systemd 安装命令  
-7. 显示 IPv4 / IPv6、NAT 状态、防火墙状态  
-
----
-
-## 🖼 示例截图
-
-> 以下为示例截图占位符，后续可替换为真实图片。
-
-![ddns-go 示例截图](https://via.placeholder.com/800x400?text=ddns-go+Installer+Screenshot)
-
----
-
-## 📝 更新日志
-
-### v1.0.0 - 2026-01-17
-- 初始版本发布
-- 支持自动安装 ddns-go 最新版本
-- 支持 systemd 自动安装与启动
-- 支持 IPv4 / IPv6 自动检测
-- 支持 NAT 检测与防火墙检测
-- 支持用户自定义端口
-
----
-
-## 📝 许可证
-
-MIT License
-
-Copyright (c) 2026
-
----
-
+感谢 ddns-go 作者提供优秀的开源项目。  
+本安装器旨在让更多用户轻松使用 ddns-go。
