@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #############################################
-# ddns-go Installer (最终整合增强版)
+# ddns-go Installer (最终增强版)
 #############################################
 
 DEFAULT_PORT=9876
@@ -118,13 +118,12 @@ fetch_latest_version() {
     log_info "获取 ddns-go 最新版本..."
 
     LATEST=$(curl -fsSL https://api.github.com/repos/jeessy2/ddns-go/releases/latest | grep tag_name | cut -d '"' -f 4)
+    VERSION="${LATEST#v}"
 
-    if [ -z "$LATEST" ]; then
+    if [ -z "$VERSION" ]; then
         log_error "获取最新版本失败"
         exit 1
     fi
-
-    VERSION="${LATEST#v}"
 
     log_success "最新版本：$LATEST（实际版本号：$VERSION）"
 }
@@ -300,11 +299,11 @@ check_iptables_status() {
 detect_public_ip() {
     log_info "检测公网 IP..."
 
-    PUB_IPV4=$(curl -4 -fsSL https://api.ipify.org || echo "")
-    PUB_IPV6=$(curl -6 -fsSL https://api64.ipify.org || echo "")
+    PUB_IPV4=$(curl -4 -fsSL https://api.ipify.org 2>/dev/null || echo "")
+    PUB_IPV6=$(curl -6 -fsSL https://api64.ipify.org 2>/dev/null || echo "")
 
-    [ -n "$PUB_IPV4" ] && log_success "公网 IPv4：$PUB_IPV4"
-    [ -n "$PUB_IPV6" ] && log_success "公网 IPv6：$PUB_IPV6"
+    [ -n "$PUB_IPV4" ] && log_success "公网 IPv4：$PUB_IPV4" || log_warn "未获取到公网 IPv4"
+    [ -n "$PUB_IPV6" ] && log_success "公网 IPv6：$PUB_IPV6" || log_warn "未获取到公网 IPv6"
 }
 
 #==================== NAT / 网络结构诊断 ====================#
@@ -325,8 +324,8 @@ network_diagnose() {
         CGNAT="否"
     fi
 
-    ASN=$(curl -fsSL https://ipinfo.io/org || echo "未知")
-    COUNTRY=$(curl -fsSL https://ipinfo.io/country || echo "未知")
+    ASN=$(curl -fsSL https://ipinfo.io/org 2>/dev/null || echo "未知")
+    COUNTRY=$(curl -fsSL https://ipinfo.io/country 2>/dev/null || echo "未知")
 
     echo ""
     echo "====== 网络诊断报告 ======"
@@ -372,8 +371,8 @@ main() {
     echo -e "           ${COLOR_GREEN}安装完成！${COLOR_RESET}"
     echo "=========================================="
     echo "访问地址："
-    [ -n "$PUB_IPV4" ] && echo "  IPv4: \`http://${PUB_IPV4}:${PORT}\`"
-    [ -n "$PUB_IPV6" ] && echo "  IPv6: \`http://[${PUB_IPV6}]:${PORT}\`"
+    [ -n "$PUB_IPV4" ] && echo "  IPv4: http://${PUB_IPV4}:${PORT}"
+    [ -n "$PUB_IPV6" ] && echo "  IPv6: http://[${PUB_IPV6}]:${PORT}"
     echo ""
     echo "配置文件：/opt/ddns-go/.ddns_go_config.yaml"
     echo "systemd 服务名：ddns-go"
