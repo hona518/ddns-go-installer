@@ -2,12 +2,6 @@
 
 #############################################
 # ddns-go Updater (最终增强版)
-# - 自动检测当前端口
-# - 交互式修改端口
-# - 自动检测端口占用
-# - 自动更新 ddns-go 到最新版本
-# - 自动修复 systemd 服务端口
-# - 显示访问地址（IPv4 / IPv6）
 #############################################
 
 LOG_FILE="/var/log/ddns-go-installer.log"
@@ -211,8 +205,8 @@ show_access_address() {
     echo -e "        ${COLOR_GREEN}访问地址${COLOR_RESET}"
     echo "=========================================="
 
-    PUB_IPV4=$(curl -4 -fsSL https://api.ipify.org || echo "")
-    PUB_IPV6=$(curl -6 -fsSL https://api64.ipify.org || echo "")
+    PUB_IPV4=$(curl -4 -fsSL https://api.ipify.org 2>/dev/null || echo "")
+    PUB_IPV6=$(curl -6 -fsSL https://api64.ipify.org 2>/dev/null || echo "")
 
     if [ -n "$PUB_IPV4" ]; then
         echo "  IPv4: http://${PUB_IPV4}:${PORT}"
