@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 
 #############################################
-# ddns-go Installer (修复版)
+# ddns-go Installer (最终整合增强版)
 # - 自动架构检测
 # - 自动获取最新版本
 # - 正确下载 ddns-go 官方 tar.gz
 # - 完整 systemd 安装
 # - NAT / IPv6 / ASN 检测
-# - 彩色输出 + 日志 + 调试模式
+# - UFW 自动检测 + 自动放行
+# - firewalld 自动检测 + 自动放行
+# - iptables 检测
+# - 端口占用检测
 #############################################
 
 DEFAULT_PORT=9876
@@ -62,7 +65,7 @@ parse_args() {
 check_dependencies() {
     log_info "检查依赖..."
 
-    for cmd in curl tar systemctl; do
+    for cmd in curl tar systemctl ss; do
         if ! command -v $cmd >/dev/null 2>&1; then
             log_error "缺少依赖：$cmd"
             exit 1
@@ -136,6 +139,20 @@ download_and_extract() {
     log_success "ddns-go 下载并解压完成"
 }
 
+#==================== 端口占用检测 ====================#
+check_port_in_use() {
+    log_info "检测端口是否被占用..."
+
+    if ss -tulnp | grep -q ":${PORT} "; then
+        PROCESS=$(ss -tulnp | grep ":${PORT} " | awk '{print $NF}')
+        log_error "端口 ${PORT} 已被占用（进程：${PROCESS}）"
+        echo "请更换端口或停止占用进程后重试。"
+        exit 1
+    fi
+
+    log_success "端口 ${PORT} 未被占用"
+}
+
 #==================== 安装 systemd 服务 ====================#
 install_systemd_service() {
     log_info "安装 systemd 服务..."
@@ -147,6 +164,103 @@ install_systemd_service() {
     systemctl restart ddns-go
 
     log_success "systemd 服务安装并已启动"
+}
+
+#==================== UFW 检测 + 自动放行 ====================#
+check_ufw_status() {
+    log_info "检测防火墙状态（UFW）..."
+
+    if ! command -v ufw >/dev/null 2>&1; then
+        log_warn "UFW 未安装（跳过 UFW 检测）"
+        return
+    fi
+
+    UFW_STATUS=$(ufw status | head -n 1)
+
+    if [[ "$UFW_STATUS" == "Status: inactive" ]]; then
+        log_warn "UFW 已安装但未启用"
+        return
+    fi
+
+    if ufw status | grep -q "${PORT}"; then
+        log_success "UFW 已启用，端口 ${PORT} 已放行"
+        return
+    fi
+
+    log_warn "UFW 已启用，但端口 ${PORT} 未放行"
+    echo -ne "是否自动放行端口 ${PORT}? [y/N]: "
+    read -r answer
+
+    case "$answer" in
+        y|Y)
+            log_info "正在放行端口 ${PORT}..."
+            ufw allow "${PORT}" >/dev/null 2>&1
+            ufw reload >/dev/null 2>&1
+            log_success "端口 ${PORT} 已成功放行"
+            ;;
+        *)
+            log_warn "已跳过自动放行端口 ${PORT}"
+            echo -e "如需手动放行：\n  ufw allow ${PORT}\n  ufw reload"
+            ;;
+    esac
+}
+
+#==================== firewalld 检测 + 自动放行 ====================#
+check_firewalld_status() {
+    log_info "检测 firewalld 状态..."
+
+    if ! command -v firewall-cmd >/dev/null 2>&1; then
+        log_warn "firewalld 未安装（跳过 firewalld 检测）"
+        return
+    fi
+
+    if ! systemctl is-active --quiet firewalld; then
+        log_warn "firewalld 已安装但未运行"
+        return
+    fi
+
+    if firewall-cmd --list-ports | grep -q "${PORT}/tcp"; then
+        log_success "firewalld 已启用，端口 ${PORT}/tcp 已放行"
+        return
+    fi
+
+    log_warn "firewalld 已启用，但端口 ${PORT}/tcp 未放行"
+    echo -ne "是否自动放行端口 ${PORT}/tcp? [y/N]: "
+    read -r answer
+
+    case "$answer" in
+        y|Y)
+            log_info "正在放行端口 ${PORT}/tcp..."
+            firewall-cmd --permanent --add-port="${PORT}/tcp" >/dev/null 2>&1
+            firewall-cmd --reload >/dev/null 2>&1
+            log_success "端口 ${PORT}/tcp 已成功放行"
+            ;;
+        *)
+            log_warn "已跳过自动放行端口 ${PORT}/tcp"
+            echo -e "如需手动放行：\n  firewall-cmd --permanent --add-port=${PORT}/tcp\n  firewall-cmd --reload"
+            ;;
+    esac
+}
+
+#==================== iptables 检测 ====================#
+check_iptables_status() {
+    log_info "检测 iptables 状态..."
+
+    if ! command -v iptables >/dev/null 2>&1; then
+        log_warn "iptables 未安装（跳过 iptables 检测）"
+        return
+    fi
+
+    if iptables -L INPUT -n | grep -q "DROP"; then
+        log_warn "检测到 iptables 存在 DROP 规则，可能影响端口访问"
+    fi
+
+    if iptables -L INPUT -n | grep -q "${PORT}"; then
+        log_success "iptables 中已存在端口 ${PORT} 的规则"
+    else
+        log_warn "iptables 中未找到端口 ${PORT} 的放行规则"
+        echo -e "如需手动放行：\n  iptables -I INPUT -p tcp --dport ${PORT} -j ACCEPT\n  iptables-save > /etc/iptables/rules.v4"
+    fi
 }
 
 #==================== 公网 IP 检测 ====================#
@@ -210,7 +324,11 @@ main() {
     detect_arch
     fetch_latest_version
     download_and_extract
+    check_port_in_use
     install_systemd_service
+    check_ufw_status
+    check_firewalld_status
+    check_iptables_status
     detect_public_ip
     network_diagnose
 
