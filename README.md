@@ -14,7 +14,11 @@
   
 ## 🚀 一键安装
 将以下命令复制到终端即可：
-```bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/main/install.sh)```
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/main/install.sh)
+```
+
 
 ## 🌐 安装完成后访问 Web UI
 脚本会自动显示你的 IPv4 / IPv6 地址，例如：
