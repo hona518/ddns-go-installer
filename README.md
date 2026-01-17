@@ -46,6 +46,73 @@
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/main/install.sh)
 ```
+## 🔄 更新 ddns-go
+
+如果你已经通过本项目安装了 ddns-go，可以使用 update.sh 一键更新到最新版本。
+
+### 一键更新（推荐）
+无需克隆仓库，直接执行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/main/scripts/update.sh)
+```
+
+### 本地更新（已克隆仓库）
+如果你已经 clone 了仓库：
+
+```bash
+./scripts/update.sh
+```
+
+### 调试模式
+输出更详细的执行过程：
+
+```bash
+./scripts/update.sh --debug
+```
+
+update.sh 会自动完成：
+
+- 检测当前版本  
+- 获取最新版本  
+- 自动下载并替换二进制  
+- 自动重启 ddns-go systemd 服务  
+- 保留安装日志 `/var/log/ddns-go-installer.log`  
+
+---
+
+## 🗑 卸载 ddns-go
+
+如果你需要卸载 ddns-go，可以使用 uninstall.sh 完整移除所有相关文件。
+
+### 一键卸载（推荐）
+无需克隆仓库，直接执行：
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/hona518/ddns-go-installer/main/scripts/uninstall.sh)
+```
+
+### 本地卸载（已克隆仓库）
+如果你已经 clone 了仓库：
+
+```bash
+./scripts/uninstall.sh
+```
+
+### 调试模式
+输出更详细的执行过程：
+
+```bash
+./scripts/uninstall.sh --debug
+```
+
+uninstall.sh 会自动完成：
+
+- 停止 ddns-go 服务  
+- 禁用 systemd 服务  
+- 删除 `/opt/ddns-go` 程序目录  
+- 删除 systemd 服务文件  
+- 保留日志文件 `/var/log/ddns-go-installer.log`  
 
 ---
 
