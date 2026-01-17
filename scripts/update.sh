@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 
 #############################################
-# ddns-go Updater (增强版)
+# ddns-go Updater (最终增强版)
+# - 自动检测当前端口
+# - 交互式修改端口
+# - 自动检测端口占用
+# - 自动更新 ddns-go 到最新版本
+# - 自动修复 systemd 服务端口
+# - 显示访问地址（IPv4 / IPv6）
+# - 彩色输出 + 日志 + 调试模式
 #############################################
 
 LOG_FILE="/var/log/ddns-go-installer.log"
@@ -198,6 +205,31 @@ fix_systemd_port() {
     log_success "systemd 服务已更新为端口：${PORT}"
 }
 
+#==================== 显示访问地址 ====================#
+show_access_address() {
+    echo ""
+    echo "=========================================="
+    echo -e "        ${COLOR_GREEN}访问地址${COLOR_RESET}"
+    echo "=========================================="
+
+    PUB_IPV4=$(curl -4 -fsSL https://api.ipify.org || echo "")
+    PUB_IPV6=$(curl -6 -fsSL https://api64.ipify.org || echo "")
+
+    if [ -n "$PUB_IPV4" ]; then
+        echo "  IPv4: http://${PUB_IPV4}:${PORT}"
+    else
+        echo "  IPv4: 未获取到公网 IPv4"
+    fi
+
+    if [ -n "$PUB_IPV6" ]; then
+        echo "  IPv6: http://[${PUB_IPV6}]:${PORT}"
+    else
+        echo "  IPv6: 未获取到公网 IPv6"
+    fi
+
+    echo ""
+}
+
 #==================== 主流程 ====================#
 main() {
     echo "=========================================="
@@ -215,6 +247,7 @@ main() {
     detect_arch
     download_and_replace
     fix_systemd_port
+    show_access_address
 
     echo ""
     echo "=========================================="
