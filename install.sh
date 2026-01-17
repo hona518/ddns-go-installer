@@ -5,12 +5,13 @@
 # - 自动架构检测
 # - 自动获取最新版本
 # - 正确下载 ddns-go 官方 tar.gz
-# - 完整 systemd 安装
+# - 完整 systemd 安装（静默模式，不阻塞）
 # - NAT / IPv6 / ASN 检测
 # - UFW 自动检测 + 自动放行
 # - firewalld 自动检测 + 自动放行
 # - iptables 检测
 # - 端口占用检测
+# - 彩色输出 + 日志 + 调试模式
 #############################################
 
 DEFAULT_PORT=9876
@@ -120,7 +121,6 @@ download_and_extract() {
 
     curl -L -o ddns-go.tar.gz "$URL"
 
-    # 校验文件大小（避免下载到 404 HTML）
     if [ "$(stat -c%s ddns-go.tar.gz)" -lt 100000 ]; then
         log_error "下载文件异常（可能是 404 页面），请检查网络或版本号"
         exit 1
@@ -153,11 +153,11 @@ check_port_in_use() {
     log_success "端口 ${PORT} 未被占用"
 }
 
-#==================== 安装 systemd 服务 ====================#
+#==================== 安装 systemd 服务（静默模式） ====================#
 install_systemd_service() {
     log_info "安装 systemd 服务..."
 
-    ./ddns-go install
+    ./ddns-go -s install -l :${PORT}
 
     systemctl daemon-reload
     systemctl enable ddns-go
