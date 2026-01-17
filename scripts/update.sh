@@ -110,16 +110,24 @@ ask_new_port() {
     esac
 }
 
-#==================== 检测端口占用 ====================#
+#==================== 端口占用检测（智能版） ====================#
 check_port_in_use() {
     log_info "检测端口是否被占用..."
 
-    if ss -tulnp | grep -q ":${PORT} "; then
-        PROCESS=$(ss -tulnp | grep ":${PORT} " | awk '{print $NF}')
-        log_warn "端口 ${PORT} 已被占用（进程：${PROCESS}）"
-        echo "更新后 ddns-go 可能无法正常启动，请注意。"
-    else
+    PORT_INFO=$(ss -tulnp | grep ":${PORT} ")
+
+    if [ -z "$PORT_INFO" ]; then
         log_success "端口 ${PORT} 未被占用"
+        return
+    fi
+
+    PROCESS_NAME=$(echo "$PORT_INFO" | sed -E 's/.*users:\(\("([^"]+).*/\1/')
+
+    if [ "$PROCESS_NAME" = "ddns-go" ]; then
+        log_info "端口 ${PORT} 正在被 ddns-go 使用（正常）"
+    else
+        log_warn "端口 ${PORT} 已被其他程序占用（进程：${PROCESS_NAME}）"
+        echo "更新后 ddns-go 可能无法正常启动，请注意。"
     fi
 }
 
