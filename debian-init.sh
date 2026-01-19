@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #############################################
-#  Oracle / Debian 初始化脚本（旗舰版 v2.2）
+#  Oracle / Debian 初始化脚本（旗舰版 v2.3）
 #  作者：Amos（由 Copilot 协助优化）
 #############################################
 
@@ -828,16 +828,11 @@ install_nft_command_layer_auto() {
 
     touch "$bashrc"
 
-    if grep -q "source /root/init.sh" "$bashrc"; then
-        warn "检测到旧路径 /root/init.sh → 自动移除"
-        sed -i '/source \/root\/init.sh/d' "$bashrc"
-    fi
-
-    sed -i "\|source $script_path|d" "$bashrc"
+    sed -i '/debian-init.sh/d' "$bashrc"
 
     {
         echo ""
-        echo "# 自动加载 nft 命令层（路径自适应）"
+        echo "# 自动加载 nft 命令层（路径自适应，仅加载函数，不自动执行 main）"
         echo "if [ -f \"$script_path\" ]; then"
         echo "    source \"$script_path\""
         echo "fi"
@@ -867,4 +862,7 @@ main() {
     info "日志文件：$LOG_FILE"
 }
 
-main
+# 防止被 source 时自动执行 main（避免循环）
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main
+fi
