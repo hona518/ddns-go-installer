@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #############################################
-#  Oracle / Debian 初始化脚本（旗舰版 v2.3）
+#  Oracle / Debian 初始化脚本（旗舰版 v2.4）
 #  作者：Amos（由 Copilot 协助优化）
 #############################################
 
@@ -53,6 +53,30 @@ safe_run() {
 detect_debian_version() {
     DEB_VER=$(grep -oE "[0-9]+" /etc/debian_version | head -n1)
     info "检测到 Debian 版本：$DEB_VER"
+}
+
+#############################################
+# 检测 SSH 端口（支持多端口）
+#############################################
+detect_ssh_ports() {
+    SSH_PORTS=()
+
+    if [ -f /etc/ssh/sshd_config ]; then
+        while read -r line; do
+            line="${line%%#*}"
+            line="$(echo "$line" | xargs || true)"
+            [ -z "$line" ] && continue
+            if [[ "$line" =~ ^Port[[:space:]]+([0-9]+)$ ]]; then
+                SSH_PORTS+=("${BASH_REMATCH[1]}")
+            fi
+        done < /etc/ssh/sshd_config
+    fi
+
+    if [ ${#SSH_PORTS[@]} -eq 0 ]; then
+        SSH_PORTS=(22)
+    fi
+
+    info "检测到 SSH 端口：${SSH_PORTS[*]}"
 }
 
 #############################################
@@ -137,24 +161,23 @@ update_system() {
 }
 
 #############################################
-# 时间同步模块（IPv4 + IPv6 + 冗余 API）
+# 时间同步模块（仅 IPv4）
 #############################################
-get_public_ip() {
+get_public_ipv4() {
     local IP=""
     local apis=(
-        "https://api64.ipify.org"
+        "https://ipv4.icanhazip.com"
         "https://api.ipify.org"
         "https://ifconfig.me/ip"
-        "https://ipinfo.io/ip"
-        "https://ipv4.icanhazip.com"
     )
 
     for api in "${apis[@]}"; do
         local TMP
         TMP=$(curl -s --max-time 5 "$api" || true)
-        if [[ "$TMP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ "$TMP" =~ ^[0-9a-fA-F:]+$ ]]; then
+        TMP=$(echo "$TMP" | tr -d '[:space:]')
+        if [[ "$TMP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             IP="$TMP"
-            success "获取公网 IP 成功：$IP（来源：$api）"
+            success "获取公网 IPv4 成功：$IP（来源：$api）"
             break
         fi
     done
@@ -178,7 +201,7 @@ setup_time_module() {
     fi
 
     local IP
-    IP=$(get_public_ip)
+    IP=$(get_public_ipv4)
 
     if [ -n "$IP" ]; then
         local NEW_TZ=""
@@ -189,6 +212,7 @@ setup_time_module() {
 
         for tz_api in "${tz_apis[@]}"; do
             NEW_TZ=$(curl -s --max-time 5 "$tz_api" || true)
+            NEW_TZ=$(echo "$NEW_TZ" | tr -d '[:space:]')
             [ -n "$NEW_TZ" ] && [ "$NEW_TZ" != "null" ] && break
         done
 
@@ -205,10 +229,10 @@ setup_time_module() {
                 info "系统时区已是：$CURRENT_TZ，无需修改"
             fi
         else
-            warn "无法根据 IP 获取时区，跳过自动时区设置"
+            warn "无法根据 IPv4 获取时区，跳过自动时区设置"
         fi
     else
-        warn "无法获取公网 IP，跳过自动时区设置"
+        warn "无法获取公网 IPv4，跳过自动时区设置"
     fi
 
     local TZ NTP_SERVER
@@ -442,7 +466,7 @@ EOF
 }
 
 #############################################
-# nftables-only 防火墙体系（放在脚本最后执行）
+# nftables-only 防火墙体系（安全版）
 #############################################
 NFT_MAIN="/etc/nftables.conf"
 NFT_D_DIR="/etc/nftables.d"
@@ -472,6 +496,21 @@ nft_check_hash_changed() {
     [ "$old" = "$new" ]
 }
 
+nft_safe_load_file() {
+    local file="$1"
+    if ! nft -c -f "$file" >/dev/null 2>&1; then
+        warn "nftables 配置语法检查失败：$file"
+        return 1
+    fi
+    if nft -f "$file"; then
+        success "nftables 规则加载成功：$file"
+        return 0
+    else
+        warn "nftables 规则加载失败：$file"
+        return 1
+    fi
+}
+
 nft_load_with_backup() {
     mkdir -p "$NFT_BACKUP_DIR"
 
@@ -480,14 +519,13 @@ nft_load_with_backup() {
     backup="${NFT_BACKUP_DIR}/nftables.conf.${ts}.preload.bak"
     cp -a "$NFT_MAIN" "$backup"
 
-    if nft -f "$NFT_MAIN"; then
-        success "nftables 规则加载成功"
+    if nft_safe_load_file "$NFT_MAIN"; then
         nft_save_hash
         return 0
     else
         warn "规则加载失败，正在回滚..."
         cp -a "$backup" "$NFT_MAIN"
-        safe_run "回滚后重新加载 nftables" nft -f "$NFT_MAIN"
+        safe_run "回滚后重新加载 nftables" nft_safe_load_file "$NFT_MAIN"
         return 1
     fi
 }
@@ -556,44 +594,51 @@ setup_nftables_only() {
         warn "正在初始化最小规则..."
         nft_backup_config
 
-        cat > "$NFT_MAIN" <<'EOF'
-flush ruleset
+        {
+            echo "flush ruleset"
+            echo ""
+            echo "table inet filter {"
+            echo "    chain input {"
+            echo "        type filter hook input priority 0;"
+            echo ""
+            echo "        iif lo accept"
+            echo "        ct state established,related accept"
+            echo ""
+            echo "        ip protocol icmp accept"
+            echo "        ip6 nexthdr icmpv6 accept"
+            echo ""
+            for p in "${SSH_PORTS[@]}"; do
+                echo "        tcp dport $p accept"
+            done
+            echo ""
+            echo "        jump user_input"
+            echo ""
+            echo "        reject with icmpx type admin-prohibited"
+            echo "    }"
+            echo ""
+            echo "    chain user_input {"
+            echo "    }"
+            echo ""
+            echo "    chain forward {"
+            echo "        type filter hook forward priority 0;"
+            echo "        reject with icmpx type admin-prohibited"
+            echo "    }"
+            echo ""
+            echo "    chain output {"
+            echo "        type filter hook output priority 0;"
+            echo "        accept"
+            echo "    }"
+            echo "}"
+            echo ""
+            echo "include \"/etc/nftables.d/*.conf\""
+        } > "$NFT_MAIN"
 
-table inet filter {
-    chain input {
-        type filter hook input priority 0;
+        if ! nft_safe_load_file "$NFT_MAIN"; then
+            warn "最小规则加载失败，清空规则以避免锁死 SSH"
+            nft flush ruleset || true
+            return 1
+        fi
 
-        iif lo accept
-        ct state established,related accept
-
-        ip protocol icmp accept
-        ip6 nexthdr icmpv6 accept
-
-        tcp dport 22 accept
-
-        jump user_input
-
-        reject with icmpx type admin-prohibited
-    }
-
-    chain user_input {
-    }
-
-    chain forward {
-        type filter hook forward priority 0;
-        reject with icmpx type admin-prohibited
-    }
-
-    chain output {
-        type filter hook output priority 0;
-        accept
-    }
-}
-
-include "/etc/nftables.d/*.conf"
-EOF
-
-        nft_load_with_backup
         safe_run "启用 nftables 服务" systemctl enable nftables
         safe_run "启动 nftables 服务" systemctl start nftables
 
@@ -617,7 +662,7 @@ EOF
 }
 
 #############################################
-# nft 命令层（专业版 + 重复规则检测 + 帮助菜单）
+# nft 命令层（专业版 + 语法检查）
 #############################################
 nft_fw_ensure_file() {
     mkdir -p "$NFT_D_DIR"
@@ -849,6 +894,7 @@ main() {
     info "开始系统初始化流程..."
 
     detect_debian_version
+    detect_ssh_ports
     enable_bbr
     set_apt_sources
     update_system
